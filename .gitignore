@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+runtime/
+*.zip
+settings.json
+logs/*
+!logs/test-results.txt
+.venv/
