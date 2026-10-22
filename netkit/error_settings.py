@@ -1,4 +1,3 @@
-import json
 import logging
 import socket
 import time
@@ -36,20 +35,6 @@ class Settings:
             sock.setblocking(False)
         logging.info('Socket settings: %s',vars(self))
 
-    def save(self):
-        self.validate()
-        (ROOT / 'settings.json').write_text(json.dumps(vars(self),indent=2),encoding='utf-8')
-
-def load_settings():
-    path=ROOT / 'settings.json'
-    if not path.exists():
-        return Settings()
-    data=json.loads(path.read_text(encoding='utf-8'))
-    settings=Settings(data['timeout'],data['send_buffer'],data['receive_buffer'],data['blocking'])
-    settings.validate()
-    return settings
-
-
 def error_text(exc):
     if isinstance(exc,TimeoutError):
         return 'Zaman aşımı: hedefe erişimi ve güvenlik duvarını kontrol edin.'
@@ -60,11 +45,6 @@ def error_text(exc):
     if isinstance(exc,ConnectionError):
         return 'Bağlantı kapandı veya veri aktarımı kesildi: ' + str(exc)
     return str(exc)
-
-
-def report_error(exc):
-    logging.exception('Operation failed: %s',exc)
-    print('HATA:',error_text(exc))
 
 
 def send_message(sock,payload):
@@ -81,6 +61,10 @@ def receive_message(sock):
         except BlockingIOError:
             time.sleep(0.05)
             continue
+        except TimeoutError:
+            if message:
+                raise ConnectionError('Mesaj tamamlanmadan zaman aşımı oluştu.')
+            raise
         if not data:
             raise ConnectionError('Karşı taraf bağlantıyı kapattı.')
         if data == b'\n':

@@ -18,11 +18,10 @@ if sys.platform == 'win32':
             os.environ.setdefault(variable,'\\\\?\\' + str(library.resolve()))
 
 import tkinter as tk
-from copy import copy
 from tkinter import ttk,scrolledtext
 
-from netkit import echo_module,machine_module,sntp_module
-from netkit.error_settings import LOGS,Settings,load_settings,accept,connect,error_text,listener,receive_message,send_message
+from netkit import chat_module,echo_module,machine_module,sntp_module
+from netkit.error_settings import Settings,accept,error_text,listener
 
 
 class NetworkApp(tk.Tk):
@@ -35,25 +34,11 @@ class NetworkApp(tk.Tk):
         self.events=queue.Queue()
         self.closing=False
         self.echo_stop=threading.Event()
-        self.chat_stop=threading.Event()
-        self.chat_socket=None
+        self.chat_session=None
         self.chat_busy=False
         self.echo_busy=False
         self.echo_socket=None
-        self.send_lock=threading.Lock()
-        self.chat_generation=0
-        try:
-            self.settings=load_settings()
-        except (OSError,ValueError,TypeError,KeyError) as exc:
-            self.settings=Settings()
-            self.events.put(('error',f'Ayarlar yüklenemedi; varsayılanlar kullanılıyor. {exc}'))
-        style=ttk.Style(self)
-        style.theme_use('clam')
-        style.configure('TFrame',background='#eef2f7')
-        style.configure('TLabel',background='#eef2f7',font=('Segoe UI',10))
-        style.configure('TButton',font=('Segoe UI',10),padding=8)
-        style.configure('TNotebook.Tab',padding=(14,9),font=('Segoe UI',10))
-        style.configure('Title.TLabel',font=('Segoe UI',24,'bold'),foreground='#17355c')
+        self.settings=Settings()
         ttk.Label(self,text='Ağ Tanılama Merkezi',style='Title.TLabel').pack(anchor='w',padx=24,pady=(20,4))
         ttk.Label(self,text='Makine bilgileri  •  TCP Echo  •  SNTP  •  Canlı sohbet').pack(anchor='w',padx=25,pady=(0,18))
         self.tabs=ttk.Notebook(self)
@@ -63,13 +48,13 @@ class NetworkApp(tk.Tk):
         self.time_tab=self.page('SNTP saati')
         self.chat_tab=self.page('Sohbet')
         self.settings_tab=self.page('Ayarlar')
-        self.help_tab=self.page('Yardım')
+        self.errors_tab=self.page('Hata yönetimi')
         self.build_info()
         self.build_echo()
         self.build_time()
         self.build_chat()
         self.build_settings()
-        self.build_help()
+        self.build_errors()
         ttk.Label(self,text='İşlem günlüğü',font=('Segoe UI',10,'bold')).pack(anchor='w',padx=24,pady=(12,4))
         self.log=scrolledtext.ScrolledText(self,height=5,state='disabled',font=('Consolas',9),background='#132239',foreground='#d5e7fb')
         self.log.pack(fill='x',padx=20)
@@ -136,6 +121,7 @@ class NetworkApp(tk.Tk):
                 message=('HATA: ' if kind == 'error' else '') + item[1]
                 if kind == 'error':
                     logging.error('%s',item[1])
+                    self.write(self.error_output,item[1])
                 self.write(self.log,datetime.datetime.now().strftime('%H:%M:%S') + '  ' + message)
                 self.status.set(message)
             elif kind == 'result':
@@ -148,7 +134,7 @@ class NetworkApp(tk.Tk):
                 self.echo_end.configure(state='disabled')
             elif kind == 'chat_message':
                 self.write(self.chat_output,item[1])
-            elif kind == 'chat_done' and item[1] == self.chat_generation:
+            elif kind == 'chat_done':
                 self.chat_busy=False
                 self.chat_start.configure(state='normal')
                 self.chat_end.configure(state='disabled')
@@ -191,7 +177,7 @@ class NetworkApp(tk.Tk):
 
     def start_echo(self):
         host,port=self.address(self.echo_host,self.echo_port)
-        settings=copy(self.settings)
+        settings=self.settings
         self.echo_stop=stop=threading.Event()
         self.echo_busy=True
         self.echo_start.configure(state='disabled')
@@ -210,10 +196,8 @@ class NetworkApp(tk.Tk):
                                 self.echo_socket=conn
                                 if stop.is_set():
                                     continue
-                                settings.apply(conn)
-                                data=receive_message(conn)
-                                send_message(conn,data)
-                            self.events.put(('log',f'Echo: {address}, {len(data)} bayt geri gönderildi.'))
+                                echo_module.reply(conn)
+                            self.events.put(('log','Echo mesajı geri gönderildi.'))
                         except (OSError,ValueError) as exc:
                             if not stop.is_set():
                                 self.events.put(('error',error_text(exc)))
@@ -240,24 +224,23 @@ class NetworkApp(tk.Tk):
 
     def test_echo(self):
         host,port=self.address(self.echo_host,self.echo_port)
-        message,settings=self.echo_message.get(),copy(self.settings)
+        message,settings=self.echo_message.get(),self.settings
         self.task('Echo testi',lambda: echo_module.client(host,port,message,settings),self.echo_output,self.echo_test)
 
     def build_time(self):
-        ttk.Label(self.time_tab,text='UTC saatini ve yerel saat farkını ölçer; sistem saatini değiştirmez.').pack(anchor='w')
+        ttk.Label(self.time_tab,text='SNTP sunucusundan gelen saat bilgisini gösterir.').pack(anchor='w')
         self.ntp_host=self.field(self.time_tab,'SNTP sunucusu','pool.ntp.org')
         self.time_button=ttk.Button(self.time_tab,text='Sunucu saatini kontrol et',command=self.check_time)
         self.time_button.pack(anchor='w',pady=10)
         self.time_output=self.output(self.time_tab)
 
     def check_time(self):
-        host,settings=self.ntp_host.get().strip(),copy(self.settings)
+        host,settings=self.ntp_host.get().strip(),self.settings
         self.task('SNTP sorgusu',lambda: sntp_module.query(host,settings),self.time_output,self.time_button)
 
     def build_chat(self):
         self.chat_host=self.field(self.chat_tab,'Sunucu / dinleme adresi','127.0.0.1')
         self.chat_port=self.field(self.chat_tab,'TCP portu',5001)
-        self.nickname=self.field(self.chat_tab,'Takma ad','Kullanıcı')
         row=ttk.Frame(self.chat_tab)
         row.pack(fill='x',pady=5)
         self.chat_mode=tk.StringVar(master=self,value='client')
@@ -274,95 +257,61 @@ class NetworkApp(tk.Tk):
         entry=ttk.Entry(row,textvariable=self.message)
         entry.pack(side='left',fill='x',expand=True)
         entry.bind('<Return>',lambda event: self.send_chat())
-        ttk.Button(row,text='Gönder',command=self.send_chat).pack(side='left',padx=8)
+        self.chat_send=ttk.Button(row,text='Gönder',command=self.send_chat)
+        self.chat_send.pack(side='left',padx=8)
 
     def start_chat(self):
         host,port=self.address(self.chat_host,self.chat_port)
-        mode,settings=self.chat_mode.get(),copy(self.settings)
-        self.chat_stop=stop=threading.Event()
-        self.chat_generation += 1
-        generation=self.chat_generation
+        mode=self.chat_mode.get()
+        session=chat_module.Chat(self.settings)
+        self.chat_session=session
         self.chat_busy=True
         self.chat_start.configure(state='disabled')
         self.chat_end.configure(state='normal')
-        self.chat_name=self.nickname.get().strip() or 'Kullanıcı'
-        self.transcript=LOGS / ('gui-chat-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.txt')
-        transcript=self.transcript
         def run():
-            conn=None
             try:
-                if mode == 'server':
-                    with listener(host,port,settings) as server:
-                        self.events.put(('log',f'Sohbet bağlantısı bekleniyor: {host}:{port}'))
-                        while not stop.is_set():
-                            try:
-                                conn,_=accept(server,settings,0.25)
-                                settings.apply(conn)
-                                break
-                            except TimeoutError:
-                                continue
-                else:
-                    conn=connect(host,port,settings)
-                if conn is None or stop.is_set():
+                self.events.put(('log','Sohbet bağlantısı bekleniyor...'))
+                if not session.connect(mode,host,port):
                     return
-                self.chat_socket=conn
                 self.events.put(('log','Sohbet bağlandı.'))
-                while not stop.is_set():
+                while session.running:
                     try:
-                        message=receive_message(conn).decode('utf-8')
-                        self.record_chat('GELEN',message,transcript)
+                        message=session.receive()
+                        self.events.put(('chat_message','GELEN: ' + message))
                     except TimeoutError:
                         continue
             except (OSError,ValueError) as exc:
-                if not stop.is_set():
+                if session.running:
                     self.events.put(('error',error_text(exc)))
             finally:
-                stop.set()
-                if conn:
-                    conn.close()
-                self.chat_socket=None
-                self.events.put(('chat_done',generation))
+                session.close()
+                self.events.put(('chat_done',))
                 self.events.put(('log','Sohbet bağlantısı kapandı.'))
         threading.Thread(target=run,daemon=True).start()
 
-    def record_chat(self,direction,message,transcript=None):
-        line=f'{datetime.datetime.now().isoformat(timespec="seconds")} {direction}: {message}'
-        with (transcript or self.transcript).open('a',encoding='utf-8') as file:
-            file.write(line + '\n')
-        self.events.put(('chat_message',line))
-
     def send_chat(self):
-        conn,text=self.chat_socket,self.message.get().strip()
-        if conn is None or self.chat_stop.is_set():
+        session=self.chat_session
+        if session is None or session.socket is None or not session.running:
             self.events.put(('error','Önce sohbet bağlantısını kurun.'))
             return
-        if not text:
+        if self.chat_send.instate(['disabled']):
             return
-        message=self.chat_name + ': ' + text
+        message=self.message.get().strip()
+        if not message:
+            return
         self.message.set('')
-        transcript=self.transcript
         def send():
-            with self.send_lock:
-                try:
-                    send_message(conn,message.encode('utf-8'))
-                except (OSError,ValueError):
-                    try:
-                        conn.shutdown(socket.SHUT_RDWR)
-                    except OSError:
-                        pass
-                    raise
-                self.record_chat('GİDEN',message,transcript)
-        self.task('Sohbet mesajı gönderimi',send)
+            try:
+                session.send(message)
+            except (OSError,ValueError):
+                session.close()
+                raise
+            self.events.put(('chat_message','GİDEN: ' + message))
+        self.task('Mesaj gönderimi',send,button=self.chat_send)
 
     def stop_chat(self):
-        self.chat_stop.set()
-        conn=self.chat_socket
-        if conn:
-            try:
-                conn.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
-            conn.close()
+        if self.chat_session:
+            self.chat_session.close()
         self.chat_end.configure(state='disabled')
 
     def build_settings(self):
@@ -371,30 +320,18 @@ class NetworkApp(tk.Tk):
         self.receive_buffer=self.field(self.settings_tab,'Alma tamponu (bayt)',self.settings.receive_buffer)
         self.blocking=tk.BooleanVar(master=self,value=self.settings.blocking)
         ttk.Checkbutton(self.settings_tab,text='Blocking modu (kapalıysa nonblocking)',variable=self.blocking).pack(anchor='w',pady=12)
-        ttk.Button(self.settings_tab,text='Ayarları kaydet',command=lambda: self.checked(self.save_settings)).pack(anchor='w')
+        ttk.Button(self.settings_tab,text='Ayarları uygula',command=lambda: self.checked(self.save_settings)).pack(anchor='w')
         ttk.Label(self.settings_tab,text='Ayarlar yeni bağlantılarda uygulanır. Timeout: 0.1–120 saniye.\nTamponlar: 1024–4194304 bayt. SNTP ve bağlantı kurma sonlu timeout kullanır.',wraplength=700).pack(anchor='w',pady=16)
 
     def save_settings(self):
         settings=Settings(float(self.timeout.get()),int(self.send_buffer.get()),int(self.receive_buffer.get()),self.blocking.get())
-        settings.save()
+        settings.validate()
         self.settings=settings
-        self.events.put(('log','Socket ayarları kaydedildi.'))
+        self.events.put(('log','Socket ayarları uygulandı: ' + str(vars(settings))))
 
-    def build_help(self):
-        help_text=self.output(self.help_tab)
-        self.write(help_text,'HIZLI BAŞLANGIÇ\n\n'
-                   'Echo: Sunucuyu başlatın, ardından aynı pencerede mesaj gönderin.\n'
-                   'Sohbet: Uygulamayı iki kez açın. Birinde Sunucu, diğerinde İstemci\n'
-                   'seçin; adres ve port aynı olmalıdır. Varsayılan sohbet portu 5001.\n\n'
-                   'İki bilgisayar: Sunucu 0.0.0.0 adresini dinler; istemci sunucunun\n'
-                   'yerel ağ IP adresine bağlanır. Güvenlik duvarı izinleri gerekebilir.\n\n'
-                   'SNTP: İnternet ve UDP 123 erişimi gerekir. Sunucu ve yerel saat\n'
-                   'karşılaştırılır. Fark ağ gecikmesini de içerir. Sistem saati değişmez.\n\n'
-                   'Hatalar alttaki işlem günlüğünde gösterilir. Sohbetler logs/gui-chat-*.txt\n'
-                   'dosyalarına kaydedilir. Sohbeti güvenilir ağda kullanın; şifreleme yoktur.\n\n'
-                   'Çalıştırma: Proje klasöründe python gui.py komutunu kullanın.\n'
-                   'Windows runtime ile: .\\runtime\\python.exe gui.py\n'
-                   'Ayrıntılı kullanım: README.md.')
+    def build_errors(self):
+        ttk.Label(self.errors_tab,text='Bağlantı ve zaman aşımı hataları burada gösterilir.').pack(anchor='w')
+        self.error_output=self.output(self.errors_tab)
 
     def close(self):
         self.closing=True

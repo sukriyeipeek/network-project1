@@ -4,62 +4,49 @@ import threading
 from .error_settings import LOGS,accept,connect,listener,receive_message,send_message
 
 
-def session(sock,settings,nickname='Kullanıcı'):
-    stop=threading.Event()
-    lock=threading.Lock()
-    transcript=LOGS / ('chat-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.txt')
+class Chat:
+    def __init__(self,settings):
+        self.settings=settings
+        self.socket=None
+        self.running=True
+        self.lock=threading.Lock()
+        name=datetime.datetime.now().strftime('chat-%Y%m%d-%H%M%S-%f.txt')
+        self.log_file=LOGS / name
 
-    def record(direction,message):
-        line=f'{datetime.datetime.now().isoformat()} {direction}: {message}\n'
-        with lock,transcript.open('a',encoding='utf-8') as file:
+    def connect(self,mode,host,port):
+        if mode == 'server':
+            with listener(host,port,self.settings) as server:
+                while self.running:
+                    try:
+                        self.socket,address=accept(server,self.settings,0.25)
+                        break
+                    except TimeoutError:
+                        continue
+        else:
+            self.socket=connect(host,port,self.settings)
+        if not self.running:
+            self.close()
+        return self.socket is not None and self.running
+
+    def record(self,direction,message):
+        line=f'{datetime.datetime.now().isoformat(timespec="seconds")} {direction}: {message}\n'
+        with self.lock,self.log_file.open('a',encoding='utf-8') as file:
             file.write(line)
 
-    def receive():
-        while not stop.is_set():
+    def send(self,message):
+        send_message(self.socket,message.encode('utf-8'))
+        self.record('GİDEN',message)
+
+    def receive(self):
+        message=receive_message(self.socket).decode('utf-8')
+        self.record('GELEN',message)
+        return message
+
+    def close(self):
+        self.running=False
+        if self.socket:
             try:
-                message=receive_message(sock).decode('utf-8')
-                record('GELEN',message)
-                print('\n' + message + '\n> ',end='',flush=True)
-            except TimeoutError:
-                continue
-            except (OSError,ValueError) as exc:
-                if not stop.is_set():
-                    print('\nBağlantı sona erdi:',exc,'\nÇıkmak için Enter tuşuna basın.')
-                stop.set()
-    worker=threading.Thread(target=receive,daemon=True)
-    worker.start()
-    print(f'Sohbet başladı. /quit: çıkış. Kayıt: {transcript}')
-    try:
-        while not stop.is_set():
-            text=input('> ')
-            if text == '/quit' or stop.is_set():
-                break
-            if text:
-                message=nickname + ': ' + text
-                send_message(sock,message.encode('utf-8'))
-                record('GİDEN',message)
-    finally:
-        stop.set()
-        try:
-            sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        sock.close()
-        worker.join(timeout=settings.timeout + 1)
-
-
-def run(mode,host,port,settings,nickname):
-    if mode == 'server':
-        with listener(host,port,settings) as server:
-            print('Sohbet bağlantısı bekleniyor; Ctrl+C: iptal.')
-            while True:
-                try:
-                    conn,address=accept(server,settings)
-                    print('Bağlanan:',address)
-                    break
-                except TimeoutError:
-                    continue
-    else:
-        conn=connect(host,port,settings)
-    with conn:
-        session(conn,settings,nickname)
+                self.socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.socket.close()

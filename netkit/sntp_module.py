@@ -1,8 +1,7 @@
-import datetime
-import logging
 import socket
 import struct
 import time
+import logging
 
 
 def query(host,settings,port=123):
@@ -13,14 +12,7 @@ def query(host,settings,port=123):
         data,address=sock.recvfrom(512)
     if len(data) < 48:
         raise ValueError('Eksik SNTP yanıtı.')
-    values=struct.unpack('!12I',data[:48])
-    server_time=values[10] - 2208988800
-    local_time=time.time()
-    result={
-        'server': host,
-        'server_utc': datetime.datetime.fromtimestamp(server_time,datetime.timezone.utc).isoformat(),
-        'local_utc': datetime.datetime.fromtimestamp(local_time,datetime.timezone.utc).isoformat(),
-        'difference_seconds': round(server_time - local_time,3)
-    }
-    logging.info('SNTP: %s',result)
+    seconds=struct.unpack('!12I',data[:48])[10] - 2208988800
+    result={'server': host,'time': time.ctime(seconds)}
+    logging.info('SNTP saati: %s',result)
     return result
