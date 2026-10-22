@@ -1,15 +1,12 @@
 import json
 import logging
-import select
 import socket
-import struct
 import time
 from dataclasses import asdict,dataclass
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent.parent
 LOGS=ROOT / 'logs'
-MAX_MESSAGE_SIZE=1024 * 1024
 LOGS.mkdir(exist_ok=True)
 logging.basicConfig(filename=LOGS / 'application.log',level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s',encoding='utf-8')
@@ -68,60 +65,25 @@ def report_error(exc):
     print('HATA:',error_text(exc))
 
 
-def wait_ready(sock,write,deadline):
-    remaining=deadline - time.monotonic()
-    if remaining <= 0:
-        raise TimeoutError('İşlem süresi doldu.')
-    if write:
-        readable,writable,_=select.select([],[sock],[],remaining)
-    else:
-        readable,writable,_=select.select([sock],[],[],remaining)
-    if not (readable or writable):
-        raise TimeoutError('Socket hazır olmadı.')
+def send_message(sock,payload):
+    if b'\n' in payload:
+        raise ValueError('Mesaj tek satır olmalı.')
+    sock.sendall(payload + b'\n')
 
 
-def send_frame(sock,payload,settings):
-    if len(payload) > MAX_MESSAGE_SIZE:
-        raise ValueError('Mesaj en fazla 1 MiB olabilir.')
-    data=memoryview(struct.pack('!I',len(payload)) + payload)
-    deadline=time.monotonic() + settings.timeout
-    while data:
-        wait_ready(sock,True,deadline)
+def receive_message(sock):
+    message=bytearray()
+    while True:
         try:
-            sent=sock.send(data)
-        except (BlockingIOError,InterruptedError):
+            data=sock.recv(1)
+        except BlockingIOError:
+            time.sleep(0.05)
             continue
-        if sent == 0:
-            raise ConnectionError('Gönderim sırasında bağlantı kapandı.')
-        data=data[sent:]
-
-
-def recv_frame(sock,settings):
-    deadline=time.monotonic() + settings.timeout
-    data=bytearray()
-    expected=4
-    header_received=False
-    while len(data) < expected:
-        try:
-            wait_ready(sock,False,deadline)
-        except TimeoutError as exc:
-            if data:
-                raise ConnectionError('Yarım mesaj alınırken zaman aşımı oluştu.') from exc
-            raise
-        try:
-            chunk=sock.recv(min(expected - len(data),settings.receive_buffer))
-        except (BlockingIOError,InterruptedError):
-            continue
-        if not chunk:
+        if not data:
             raise ConnectionError('Karşı taraf bağlantıyı kapattı.')
-        data.extend(chunk)
-        if not header_received and len(data) == 4:
-            size=struct.unpack('!I',data)[0]
-            if size > MAX_MESSAGE_SIZE:
-                raise ValueError('Gelen mesaj boyutu sınırı aşıyor.')
-            expected=4 + size
-            header_received=True
-    return bytes(data[4:])
+        if data == b'\n':
+            return bytes(message)
+        message.extend(data)
 
 
 def connect(host,port,settings):
@@ -148,7 +110,7 @@ def listener(host,port,settings):
 
 
 def accept(sock,settings):
-    wait_ready(sock,False,time.monotonic() + settings.timeout)
+    sock.settimeout(settings.timeout)
     conn,address=sock.accept()
     try:
         settings.apply(conn)

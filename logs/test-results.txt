@@ -1,25 +1,17 @@
-test_gui_network_workflow (test_gui.GuiTests.test_gui_network_workflow) ... ok
-test_stop_waiting_server_and_invalid_address (test_gui.GuiTests.test_stop_waiting_server_and_invalid_address) ... ok
-test_chat_transcript (test_toolkit.ToolkitTests.test_chat_transcript) ... Sohbet başladı. /quit: çıkış. Kayıt: <proje>\logs\chat-20261022-153110-649859.txt
+test_disconnect_and_timeout (__main__.BasicTests.test_disconnect_and_timeout) ... ok
+test_echo (__main__.BasicTests.test_echo) ... ok
+test_gui_echo_and_chat (__main__.BasicTests.test_gui_echo_and_chat) ... ok
+test_machine_info (__main__.BasicTests.test_machine_info) ... ok
+test_messages (__main__.BasicTests.test_messages) ... ok
+test_settings (__main__.BasicTests.test_settings) ... ok
+test_sntp (__main__.BasicTests.test_sntp) ... ok
+test_terminal_chat (__main__.BasicTests.test_terminal_chat) ... Sohbet başladı. /quit: çıkış. Kayıt: <proje>\logs\chat-20261022-173250-487416.txt
 
 Bağlantı sona erdi: Karşı taraf bağlantıyı kapattı. 
 Çıkmak için Enter tuşuna basın.
 ok
-test_echo_blocking_and_nonblocking (test_toolkit.ToolkitTests.test_echo_blocking_and_nonblocking) ... ok
-test_empty_and_consecutive_messages (test_toolkit.ToolkitTests.test_empty_and_consecutive_messages) ... ok
-test_four_byte_body_timeout (test_toolkit.ToolkitTests.test_four_byte_body_timeout) ... ok
-test_fragmented_frame (test_toolkit.ToolkitTests.test_fragmented_frame) ... ok
-test_invalid_frame (test_toolkit.ToolkitTests.test_invalid_frame) ... ok
-test_machine (test_toolkit.ToolkitTests.test_machine) ... ok
-test_partial_header_timeout (test_toolkit.ToolkitTests.test_partial_header_timeout) ... ok
-test_refused_connection (test_toolkit.ToolkitTests.test_refused_connection) ... ok
-test_settings (test_toolkit.ToolkitTests.test_settings) ... ok
-test_sntp_valid_and_invalid (test_toolkit.ToolkitTests.test_sntp_valid_and_invalid) ... ok
-test_timeout (test_toolkit.ToolkitTests.test_timeout) ... ok
-test_truncated_frame (test_toolkit.ToolkitTests.test_truncated_frame) ... ok
-test_help_and_echo_stop (__main__.ReviewTests.test_help_and_echo_stop) ... ok
 
 ----------------------------------------------------------------------
-Ran 16 tests in 4.135s
+Ran 8 tests in 1.997s
 
 OK

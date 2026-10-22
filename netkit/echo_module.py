@@ -1,13 +1,13 @@
 import logging
 import time
-from .error_settings import accept,connect,listener,recv_frame,send_frame
+from .error_settings import accept,connect,listener,receive_message,send_message
 
 
 def serve_once(server,settings):
     conn,address=accept(server,settings)
     with conn:
-        payload=recv_frame(conn,settings)
-        send_frame(conn,payload,settings)
+        payload=receive_message(conn)
+        send_message(conn,payload)
     logging.info('Echo served %s bytes to %s',len(payload),address)
     return len(payload)
 
@@ -30,8 +30,8 @@ def client(host,port,message,settings):
     payload=message.encode('utf-8')
     start=time.perf_counter()
     with connect(host,port,settings) as sock:
-        send_frame(sock,payload,settings)
-        response=recv_frame(sock,settings)
+        send_message(sock,payload)
+        response=receive_message(sock)
     result={'matches': response == payload,'bytes': len(payload),
               'round_trip_ms': round((time.perf_counter() - start) * 1000,3),
               'received': response.decode('utf-8')}

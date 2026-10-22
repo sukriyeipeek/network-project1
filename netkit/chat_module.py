@@ -1,7 +1,7 @@
 import datetime
 import socket
 import threading
-from .error_settings import LOGS,accept,connect,listener,recv_frame,send_frame
+from .error_settings import LOGS,accept,connect,listener,receive_message,send_message
 
 
 def session(sock,settings,nickname='Kullanıcı'):
@@ -17,7 +17,7 @@ def session(sock,settings,nickname='Kullanıcı'):
     def receive():
         while not stop.is_set():
             try:
-                message=recv_frame(sock,settings).decode('utf-8')
+                message=receive_message(sock).decode('utf-8')
                 record('GELEN',message)
                 print('\n' + message + '\n> ',end='',flush=True)
             except TimeoutError:
@@ -36,7 +36,7 @@ def session(sock,settings,nickname='Kullanıcı'):
                 break
             if text:
                 message=nickname + ': ' + text
-                send_frame(sock,message.encode('utf-8'),settings)
+                send_message(sock,message.encode('utf-8'))
                 record('GİDEN',message)
     finally:
         stop.set()

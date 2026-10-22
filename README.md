@@ -10,7 +10,7 @@ Python 3.11 veya üzeri ve Tkinter gerekiyor.Proje klasöründe şu komutla aray
 python gui.py
 ```
 
-GitHub sürümüne runtime klasörünü eklemedim. Çalıştırmak için Python kurulu olmalı.
+GitHub sürümünde runtime klasörü yok. Çalıştırmak için Python kurulu olmalı.
 
 ## Kullanım
 
@@ -21,3 +21,5 @@ GitHub sürümüne runtime klasörünü eklemedim. Çalıştırmak için Python 
 - Ayarlar sekmesinden zaman aşımını, tampon boyutlarını ve blocking modunu değiştiriyorum. Yeni ayarlar sonraki bağlantıda uygulanıyor.
 
 Modülleri netkit klasöründe ayrı dosyalarda tuttum. Sohbet kayıtları ve işlem çıktıları logs klasörüne kaydediliyor. Bağlantı hataları arayüzün alt kısmında gösteriliyor.SNTP için internet bağlantısı ve UDP 123 erişimi gerekiyor.
+
+Echo ve sohbet için tek satırlık metin mesajları kullanıyorum. Mesajın sonunu satır sonu karakteriyle ayırıyorum. SNTP sonucunda sunucu saati ile yerel saatin basit farkını gösteriyorum; hassas saat senkronizasyonu yapmıyorum. Nonblocking modda veri henüz gelmediyse kısa süre bekleyip tekrar almayı deniyorum. Gönderme hazır değilse hata gösteriliyor.

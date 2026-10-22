@@ -22,7 +22,7 @@ from dataclasses import replace
 from tkinter import ttk,scrolledtext
 
 from netkit import echo_module,machine_module,sntp_module
-from netkit.error_settings import LOGS,Settings,accept,connect,error_text,listener,recv_frame,send_frame
+from netkit.error_settings import LOGS,Settings,accept,connect,error_text,listener,receive_message,send_message
 
 
 class NetworkApp(tk.Tk):
@@ -211,8 +211,8 @@ class NetworkApp(tk.Tk):
                                 if stop.is_set():
                                     continue
                                 settings.apply(conn)
-                                data=recv_frame(conn,settings)
-                                send_frame(conn,data,settings)
+                                data=receive_message(conn)
+                                send_message(conn,data)
                             self.events.put(('log',f'Echo: {address}, {len(data)} bayt geri gönderildi.'))
                         except (OSError,ValueError) as exc:
                             if not stop.is_set():
@@ -310,7 +310,7 @@ class NetworkApp(tk.Tk):
                 self.events.put(('log','Sohbet bağlandı.'))
                 while not stop.is_set():
                     try:
-                        message=recv_frame(conn,settings).decode('utf-8')
+                        message=receive_message(conn).decode('utf-8')
                         self.record_chat('GELEN',message,transcript)
                     except TimeoutError:
                         continue
@@ -340,16 +340,12 @@ class NetworkApp(tk.Tk):
         if not text:
             return
         message=self.chat_name + ': ' + text
-        if len(message.encode('utf-8')) > 1048576:
-            self.events.put(('error','Mesaj en fazla 1 MiB olabilir.'))
-            return
         self.message.set('')
-        settings=self.chat_settings
         transcript=self.transcript
         def send():
             with self.send_lock:
                 try:
-                    send_frame(conn,message.encode('utf-8'),settings)
+                    send_message(conn,message.encode('utf-8'))
                 except (OSError,ValueError):
                     try:
                         conn.shutdown(socket.SHUT_RDWR)
@@ -393,8 +389,8 @@ class NetworkApp(tk.Tk):
                    'seçin; adres ve port aynı olmalıdır. Varsayılan sohbet portu 5001.\n\n'
                    'İki bilgisayar: Sunucu 0.0.0.0 adresini dinler; istemci sunucunun\n'
                    'yerel ağ IP adresine bağlanır. Güvenlik duvarı izinleri gerekebilir.\n\n'
-                   'SNTP: İnternet ve UDP 123 erişimi gerekir. Pozitif offset sunucu\n'
-                   'saatinin ileride olduğunu gösterir. Sistem saati değiştirilmez.\n\n'
+                   'SNTP: İnternet ve UDP 123 erişimi gerekir. Sunucu ve yerel saat\n'
+                   'karşılaştırılır. Fark ağ gecikmesini de içerir. Sistem saati değişmez.\n\n'
                    'Hatalar alttaki işlem günlüğünde gösterilir. Sohbetler logs/gui-chat-*.txt\n'
                    'dosyalarına kaydedilir. Sohbeti güvenilir ağda kullanın; şifreleme yoktur.\n\n'
                    'Çalıştırma: Proje klasöründe python gui.py komutunu kullanın.\n'
