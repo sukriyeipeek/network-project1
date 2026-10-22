@@ -1,8 +1,7 @@
 import argparse
 import json
-from dataclasses import asdict
 from netkit import chat_module,echo_module,machine_module,sntp_module
-from netkit.error_settings import LOGS,Settings,error_text,report_error
+from netkit.error_settings import LOGS,Settings,load_settings,error_text,report_error
 
 
 def display(result):
@@ -48,7 +47,7 @@ def menu(settings):
             elif choice == '4':
                 display(sntp_module.query(input('SNTP sunucusu [pool.ntp.org]: ') or 'pool.ntp.org',settings))
             elif choice == '6':
-                display(asdict(settings))
+                display(vars(settings))
                 updated=Settings(
                     timeout=float(input('Timeout saniye [5]: ') or 5),
                     send_buffer=int(input('Gönderme tamponu [65536]: ') or 65536),
@@ -66,7 +65,7 @@ def menu(settings):
                 print('Geçersiz seçim.')
         except KeyboardInterrupt:
             print('\nİşlem durduruldu; ana menüye dönülüyor.')
-        except (OSError,ValueError,TypeError) as exc:
+        except (OSError,ValueError,TypeError,KeyError) as exc:
             report_error(exc)
 
 
@@ -81,7 +80,7 @@ def main():
     parser.add_argument('--ntp-host',default='pool.ntp.org')
     args=parser.parse_args()
     try:
-        settings=Settings.load()
+        settings=load_settings()
         if not 1 <= args.port <= 65535:
             raise ValueError('Port 1–65535 olmalı.')
         if args.command == 'menu':
@@ -102,7 +101,7 @@ def main():
     except KeyboardInterrupt:
         print('\nProgram kapatıldı.')
         return 130
-    except (OSError,ValueError,TypeError) as exc:
+    except (OSError,ValueError,TypeError,KeyError) as exc:
         report_error(exc)
         return 1
 

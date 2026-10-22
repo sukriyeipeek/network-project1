@@ -2,7 +2,6 @@ import json
 import logging
 import socket
 import time
-from dataclasses import asdict,dataclass
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -12,12 +11,12 @@ logging.basicConfig(filename=LOGS / 'application.log',level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s',encoding='utf-8')
 
 
-@dataclass
 class Settings:
-    timeout: float=5.0
-    send_buffer: int=65536
-    receive_buffer: int=65536
-    blocking: bool=True
+    def __init__(self,timeout=5.0,send_buffer=65536,receive_buffer=65536,blocking=True):
+        self.timeout=timeout
+        self.send_buffer=send_buffer
+        self.receive_buffer=receive_buffer
+        self.blocking=blocking
 
     def validate(self):
         if not 0.1 <= self.timeout <= 120:
@@ -31,21 +30,24 @@ class Settings:
         self.validate()
         sock.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,self.send_buffer)
         sock.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,self.receive_buffer)
-        sock.settimeout(self.timeout if self.blocking else 0.0)
-        logging.info('Socket settings: %s',asdict(self))
+        if self.blocking:
+            sock.settimeout(self.timeout)
+        else:
+            sock.setblocking(False)
+        logging.info('Socket settings: %s',vars(self))
 
     def save(self):
         self.validate()
-        (ROOT / 'settings.json').write_text(json.dumps(asdict(self),indent=2),encoding='utf-8')
+        (ROOT / 'settings.json').write_text(json.dumps(vars(self),indent=2),encoding='utf-8')
 
-    @classmethod
-    def load(cls):
-        path=ROOT / 'settings.json'
-        if not path.exists():
-            return cls()
-        result=cls(**json.loads(path.read_text(encoding='utf-8')))
-        result.validate()
-        return result
+def load_settings():
+    path=ROOT / 'settings.json'
+    if not path.exists():
+        return Settings()
+    data=json.loads(path.read_text(encoding='utf-8'))
+    settings=Settings(data['timeout'],data['send_buffer'],data['receive_buffer'],data['blocking'])
+    settings.validate()
+    return settings
 
 
 def error_text(exc):
@@ -87,8 +89,10 @@ def receive_message(sock):
 
 
 def connect(host,port,settings):
-    sock=socket.create_connection((host,port),timeout=settings.timeout)
+    sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     try:
+        sock.settimeout(settings.timeout)
+        sock.connect((host,port))
         settings.apply(sock)
         return sock
     except Exception:
@@ -109,8 +113,10 @@ def listener(host,port,settings):
         raise
 
 
-def accept(sock,settings):
-    sock.settimeout(settings.timeout)
+def accept(sock,settings,timeout=None):
+    if timeout is None:
+        timeout=settings.timeout
+    sock.settimeout(timeout)
     conn,address=sock.accept()
     try:
         settings.apply(conn)

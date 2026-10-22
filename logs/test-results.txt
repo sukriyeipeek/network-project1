@@ -5,13 +5,13 @@ test_machine_info (__main__.BasicTests.test_machine_info) ... ok
 test_messages (__main__.BasicTests.test_messages) ... ok
 test_settings (__main__.BasicTests.test_settings) ... ok
 test_sntp (__main__.BasicTests.test_sntp) ... ok
-test_terminal_chat (__main__.BasicTests.test_terminal_chat) ... Sohbet başladı. /quit: çıkış. Kayıt: <proje>\logs\chat-20261022-173250-487416.txt
+test_terminal_chat (__main__.BasicTests.test_terminal_chat) ... Sohbet başladı. /quit: çıkış. Kayıt: <proje>\logs\chat-20261022-180717-221766.txt
 
 Bağlantı sona erdi: Karşı taraf bağlantıyı kapattı. 
 Çıkmak için Enter tuşuna basın.
 ok
 
 ----------------------------------------------------------------------
-Ran 8 tests in 1.997s
+Ran 8 tests in 0.987s
 
 OK

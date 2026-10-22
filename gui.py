@@ -18,11 +18,11 @@ if sys.platform == 'win32':
             os.environ.setdefault(variable,'\\\\?\\' + str(library.resolve()))
 
 import tkinter as tk
-from dataclasses import replace
+from copy import copy
 from tkinter import ttk,scrolledtext
 
 from netkit import echo_module,machine_module,sntp_module
-from netkit.error_settings import LOGS,Settings,accept,connect,error_text,listener,receive_message,send_message
+from netkit.error_settings import LOGS,Settings,load_settings,accept,connect,error_text,listener,receive_message,send_message
 
 
 class NetworkApp(tk.Tk):
@@ -43,8 +43,8 @@ class NetworkApp(tk.Tk):
         self.send_lock=threading.Lock()
         self.chat_generation=0
         try:
-            self.settings=Settings.load()
-        except (OSError,ValueError,TypeError) as exc:
+            self.settings=load_settings()
+        except (OSError,ValueError,TypeError,KeyError) as exc:
             self.settings=Settings()
             self.events.put(('error',f'Ayarlar yüklenemedi; varsayılanlar kullanılıyor. {exc}'))
         style=ttk.Style(self)
@@ -115,7 +115,7 @@ class NetworkApp(tk.Tk):
                 if result:
                     self.events.put(('result',result,value))
                 self.events.put(('log',label + ' tamamlandı.'))
-            except (OSError,ValueError,TypeError) as exc:
+            except (OSError,ValueError,TypeError,KeyError) as exc:
                 logging.exception('GUI operation: %s',label)
                 self.events.put(('error',error_text(exc)))
             finally:
@@ -191,7 +191,7 @@ class NetworkApp(tk.Tk):
 
     def start_echo(self):
         host,port=self.address(self.echo_host,self.echo_port)
-        settings=replace(self.settings)
+        settings=copy(self.settings)
         self.echo_stop=stop=threading.Event()
         self.echo_busy=True
         self.echo_start.configure(state='disabled')
@@ -202,7 +202,7 @@ class NetworkApp(tk.Tk):
                     self.events.put(('log',f'Echo dinleniyor: {host}:{port}'))
                     while not stop.is_set():
                         try:
-                            conn,address=accept(server,replace(settings,timeout=0.25))
+                            conn,address=accept(server,settings,0.25)
                         except TimeoutError:
                             continue
                         try:
@@ -240,7 +240,7 @@ class NetworkApp(tk.Tk):
 
     def test_echo(self):
         host,port=self.address(self.echo_host,self.echo_port)
-        message,settings=self.echo_message.get(),replace(self.settings)
+        message,settings=self.echo_message.get(),copy(self.settings)
         self.task('Echo testi',lambda: echo_module.client(host,port,message,settings),self.echo_output,self.echo_test)
 
     def build_time(self):
@@ -251,7 +251,7 @@ class NetworkApp(tk.Tk):
         self.time_output=self.output(self.time_tab)
 
     def check_time(self):
-        host,settings=self.ntp_host.get().strip(),replace(self.settings)
+        host,settings=self.ntp_host.get().strip(),copy(self.settings)
         self.task('SNTP sorgusu',lambda: sntp_module.query(host,settings),self.time_output,self.time_button)
 
     def build_chat(self):
@@ -278,14 +278,13 @@ class NetworkApp(tk.Tk):
 
     def start_chat(self):
         host,port=self.address(self.chat_host,self.chat_port)
-        mode,settings=self.chat_mode.get(),replace(self.settings)
+        mode,settings=self.chat_mode.get(),copy(self.settings)
         self.chat_stop=stop=threading.Event()
         self.chat_generation += 1
         generation=self.chat_generation
         self.chat_busy=True
         self.chat_start.configure(state='disabled')
         self.chat_end.configure(state='normal')
-        self.chat_settings=settings
         self.chat_name=self.nickname.get().strip() or 'Kullanıcı'
         self.transcript=LOGS / ('gui-chat-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.txt')
         transcript=self.transcript
@@ -297,7 +296,7 @@ class NetworkApp(tk.Tk):
                         self.events.put(('log',f'Sohbet bağlantısı bekleniyor: {host}:{port}'))
                         while not stop.is_set():
                             try:
-                                conn,_=accept(server,replace(settings,timeout=0.25))
+                                conn,_=accept(server,settings,0.25)
                                 settings.apply(conn)
                                 break
                             except TimeoutError:
